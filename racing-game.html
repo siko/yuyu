@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赛车游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+
+        .game-container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            margin-bottom: 15px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .info-item span {
+            color: #feca57;
+            font-weight: bold;
+        }
+
+        #gameCanvas {
+            border: 4px solid #ff6b6b;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+            display: block;
+            margin: 0 auto;
+        }
+
+        .controls {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #aaa;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .overlay-content {
+            text-align: center;
+            padding: 40px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            border: 3px solid #ff6b6b;
+            box-shadow: 0 0 40px rgba(255, 107, 107, 0.5);
+        }
+
+        .overlay-content h2 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        .game-over {
+            color: #ff6b6b;
+        }
+
+        .level-complete {
+            color: #feca57;
+        }
+
+        .reward {
+            font-size: 1.5em;
+            color: #4ecdc4;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(78, 205, 196, 0.2);
+            border-radius: 10px;
+            border: 2px solid #4ecdc4;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.5);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .car-selection {
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .car-option {
+            width: 80px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .car-option:hover {
+            transform: scale(1.1);
+            border-color: #4ecdc4;
+            box-shadow: 0 0 20px rgba(78, 205, 196, 0.5);
+        }
+
+        .car-option.selected {
+            border-color: #feca57;
+            box-shadow: 0 0 25px rgba(254, 202, 87, 0.8);
+            background: rgba(254, 202, 87, 0.2);
+        }
+
+        .car-preview {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🏎️ 赛车游戏</h1>
+
+        <div class="info-panel">
+            <div class="info-item">关卡: <span id="level">1</span>/7</div>
+            <div class="info-item">分数: <span id="score">0</span></div>
+            <div class="info-item">奖励: <span id="totalReward">0</span></div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+        <div class="controls">
+            <p>使用 ⬅️ ➡️ 或 A D 控制赛车左右移动 | 空格键发射子弹消灭屏障 | ⚠️ 小心红色TNT障碍，碰到会爆炸！</p>
+        </div>
+    </div>
+
+    <!-- 开始游戏界面 -->
+    <div id="startOverlay" class="overlay">
+        <div class="overlay-content">
+            <h2 style="color: #4ecdc4;">🏎️ 赛车游戏</h2>
+            <p style="font-size: 1.2em; margin-bottom: 20px;">7个关卡等你挑战！</p>
+            <p style="color: #aaa; margin-bottom: 15px;">选择你的赛车：</p>
+            <div class="car-selection" id="carSelection">
+                <div class="car-option selected" data-car="0" onclick="selectCar(0)">
+                    <div class="car-preview">🚗</div>
+                </div>
+                <div class="car-option" data-car="1" onclick="selectCar(1)">
+                    <div class="car-preview">🏎️</div>
+                </div>
+                <div class="car-option" data-car="2" onclick="selectCar(2)">
+                    <div class="car-preview">🚙</div>
+                </div>
+                <div class="car-option" data-car="3" onclick="selectCar(3)">
+                    <div class="car-preview">🚕</div>
+                </div>
+                <div class="car-option" data-car="4" onclick="selectCar(4)">
+                    <div class="car-preview">🚓</div>
+                </div>
+            </div>
+            <p style="color: #aaa; margin-top: 20px; margin-bottom: 10px;">控制赛车左右移动，空格键发射子弹</p>
+            <p style="color: #aaa; margin-bottom: 10px;">屏障从上方出现，用子弹消灭它们或小心躲避！</p>
+            <p style="color: #ff4757; margin-bottom: 10px; font-weight: bold;">⚠️ 注意：红色TNT障碍碰到会爆炸，必须用子弹提前消灭！</p>
+            <button onclick="startGame()">开始游戏</button>
+        </div>
+    </div>
+
+    <!-- 游戏结束界面 -->
+    <div id="gameOverOverlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2 class="game-over">💥 游戏结束</h2>
+            <p style="font-size: 1.3em; margin: 15px 0;" id="gameOverReason">你撞到障碍了！</p>
+            <p>最终分数: <span id="finalScore" style="color: #feca57;">0</span></p>
+            <p>总奖励: <span id="finalReward" style="color: #4ecdc4;">0</span></p>
+            <button onclick="restartGame()">重新开始</button>
+        </div>
+    </div>
+
+    <!-- 关卡完成界面 -->
+    <div id="levelCompleteOverlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2 class="level-complete">🎉 关卡完成！</h2>
+            <div class="reward">
+                获得奖励: <span id="levelReward">100</span> 分
+            </div>
+            <p style="font-size: 1.2em;">准备进入第 <span id="nextLevel">2</span> 关</p>
+            <button onclick="nextLevel()">继续</button>
+        </div>
+    </div>
+
+    <!-- 游戏胜利界面 -->
+    <div id="winOverlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2 style="color: #4ecdc4;">🏆 恭喜通关！</h2>
+            <p style="font-size: 1.5em; margin: 15px 0;">你完成了所有7个关卡！</p>
+            <div class="reward">
+                总奖励: <span id="winReward">0</span> 分
+            </div>
+            <p>最终分数: <span id="winScore" style="color: #feca57;">0</span></p>
+            <button onclick="restartGame()">再玩一次</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 游戏状态
+        let gameRunning = false;
+        let currentLevel = 1;
+        let score = 0;
+        let totalReward = 0;
+        let selectedCarIndex = 0;
+        let gameTime = 0;
+        let levelStartTime = 0;
+        let barriersPassed = 0;
+
+        // 赛车样式配置
+        const carStyles = [
+            { emoji: '🚗', color: '#ff6b6b', name: '红色轿车' },
+            { emoji: '🏎️', color: '#feca57', name: '跑车' },
+            { emoji: '🚙', color: '#4ecdc4', name: 'SUV' },
+            { emoji: '🚕', color: '#ff9ff3', name: '出租车' },
+            { emoji: '🚓', color: '#54a0ff', name: '警车' }
+        ];
+
+        // 赛车
+        const car = {
+            x: 380,  // 初始位置在底部中央
+            y: 450,  // 固定在底部
+            width: 40,
+            height: 25,
+            speed: 6,
+            color: '#ff6b6b'
+        };
+
+        // 屏障数组
+        let barriers = [];
+
+        // 子弹数组
+        let bullets = [];
+
+        // TNT爆炸障碍数组
+        let tntObstacles = [];
+
+        // 爆炸效果数组
+        let explosions = [];
+
+        // 按键状态
+        const keys = {
+            left: false,
+            right: false,
+            space: false
+        };
+
+        // 子弹发射冷却
+        let bulletCooldown = 0;
+        const bulletCooldownTime = 200;  // 200ms冷却时间
+
+        // 屏障生成计时器
+        let barrierSpawnTimer = 0;
+        let lastFrameTime = 0;
+
+        // TNT生成计时器
+        let tntSpawnTimer = 0;
+
+        // 7个关卡设计 - 生存模式
+        const levels = [
+            // 第1关 - 简单模式：生存30秒或躲避10个屏障
+            {
+                reward: 100,
+                duration: 30000,  // 30秒
+                barrierSpawnRate: 2000,  // 每2秒生成一个
+                barrierSpeed: 2,  // 向下移动速度
+                barrierHorizontalSpeed: 1.5,  // 左右移动速度
+                targetBarriers: 10,
+                tntCount: 2,  // TNT数量
+                tntSpawnRate: 5000  // 每5秒生成一个TNT
+            },
+            // 第2关 - 中等难度
+            {
+                reward: 200,
+                duration: 40000,  // 40秒
+                barrierSpawnRate: 1500,
+                barrierSpeed: 2.5,
+                barrierHorizontalSpeed: 2,
+                targetBarriers: 15,
+                tntCount: 4,
+                tntSpawnRate: 4000
+            },
+            // 第3关 - 困难
+            {
+                reward: 300,
+                duration: 50000,  // 50秒
+                barrierSpawnRate: 1200,
+                barrierSpeed: 3,
+                barrierHorizontalSpeed: 2.5,
+                targetBarriers: 20,
+                tntCount: 6,
+                tntSpawnRate: 3500
+            },
+            // 第4关 - 非常困难
+            {
+                reward: 500,
+                duration: 60000,  // 60秒
+                barrierSpawnRate: 1000,
+                barrierSpeed: 3.5,
+                barrierHorizontalSpeed: 3,
+                targetBarriers: 25,
+                tntCount: 8,
+                tntSpawnRate: 3000
+            },
+            // 第5关 - 终极挑战
+            {
+                reward: 1000,
+                duration: 70000,  // 70秒
+                barrierSpawnRate: 800,
+                barrierSpeed: 4,
+                barrierHorizontalSpeed: 3.5,
+                targetBarriers: 30,
+                tntCount: 10,
+                tntSpawnRate: 2500
+            },
+            // 第6关 - 地狱模式
+            {
+                reward: 1500,
+                duration: 80000,  // 80秒
+                barrierSpawnRate: 700,
+                barrierSpeed: 4.5,
+                barrierHorizontalSpeed: 4,
+                targetBarriers: 35,
+                tntCount: 12,
+                tntSpawnRate: 2000
+            },
+            // 第7关 - 终极地狱
+            {
+                reward: 2000,
+                duration: 90000,  // 90秒
+                barrierSpawnRate: 600,
+                barrierSpeed: 5,
+                barrierHorizontalSpeed: 4.5,
+                targetBarriers: 40,
+                tntCount: 15,
+                tntSpawnRate: 1800
+            }
+        ];
+
+        // 选择赛车
+        function selectCar(index) {
+            selectedCarIndex = index;
+            car.color = carStyles[index].color;
+            
+            // 更新UI
+            document.querySelectorAll('.car-option').forEach((option, i) => {
+                if (i === index) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+        }
+
+        // 生成屏障
+        function spawnBarrier() {
+            const level = levels[currentLevel - 1];
+            const roadWidth = 400;
+            const roadX = (canvas.width - roadWidth) / 2;
+            const barrierWidth = 120 + Math.random() * 80;  // 120-200宽度
+            const startX = roadX + Math.random() * (roadWidth - barrierWidth);
+            
+            barriers.push({
+                x: startX,
+                y: -30,  // 从画布上方开始
+                width: barrierWidth,
+                height: 30,
+                speedY: level.barrierSpeed,
+                speedX: level.barrierHorizontalSpeed,
+                direction: Math.random() > 0.5 ? 1 : -1,  // 随机左右方向
+                roadX: roadX,  // 记录道路边界
+                roadWidth: roadWidth
+            });
+        }
+
+        // 发射子弹
+        function shootBullet() {
+            if (bulletCooldown <= 0) {
+                bullets.push({
+                    x: car.x + car.width / 2 - 3,  // 从汽车中心发射
+                    y: car.y,  // 从汽车顶部发射
+                    width: 6,
+                    height: 12,
+                    speed: 8
+                });
+                bulletCooldown = bulletCooldownTime;
+            }
+        }
+
+        // 生成TNT障碍
+        function spawnTNT() {
+            const level = levels[currentLevel - 1];
+            const roadWidth = 400;
+            const roadX = (canvas.width - roadWidth) / 2;
+            const tntSize = 40;
+            const startX = roadX + Math.random() * (roadWidth - tntSize);
+            
+            tntObstacles.push({
+                x: startX,
+                y: -tntSize,  // 从画布上方开始
+                width: tntSize,
+                height: tntSize,
+                speedY: level.barrierSpeed * 0.8,  // 稍微慢一点
+                speedX: level.barrierHorizontalSpeed * 0.6,
+                direction: Math.random() > 0.5 ? 1 : -1,
+                roadX: roadX,
+                roadWidth: roadWidth
+            });
+        }
+
+        // 创建爆炸效果
+        function createExplosion(x, y, size = 60) {
+            const particleCount = 40;
+            const particles = [];
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.8;
+                const speed = 3 + Math.random() * 5;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 1.0,  // 生命周期，从1到0
+                    decay: 0.015 + Math.random() * 0.025,  // 衰减速度
+                    size: 4 + Math.random() * 6,
+                    color: i % 4 === 0 ? '#ff6b6b' : (i % 4 === 1 ? '#feca57' : (i % 4 === 2 ? '#ff4757' : '#ff9ff3'))  // 红、黄、深红、粉红
+                });
+            }
+            
+            explosions.push({
+                x: x,
+                y: y,
+                particles: particles,
+                life: 1.0,
+                maxSize: size,
+                centerSize: size * 0.3  // 中心光球大小
+            });
+        }
+
+        // 初始化关卡
+        function initLevel(level) {
+            car.x = canvas.width / 2 - car.width / 2;  // 底部中央
+            car.y = canvas.height - car.height - 10;  // 固定在底部
+            
+            // 重置状态
+            barriers = [];
+            bullets = [];
+            tntObstacles = [];
+            explosions = [];
+            barrierSpawnTimer = 0;
+            tntSpawnTimer = 0;
+            barriersPassed = 0;
+            levelStartTime = Date.now();
+            gameTime = 0;
+            lastFrameTime = 0;
+            bulletCooldown = 0;
+            
+            // 应用选中的赛车样式
+            car.color = carStyles[selectedCarIndex].color;
+
+            updateUI();
+        }
+
+        // 更新UI
+        function updateUI() {
+            document.getElementById('level').textContent = currentLevel;
+            document.getElementById('score').textContent = score;
+            document.getElementById('totalReward').textContent = totalReward;
+        }
+
+        // 碰撞检测
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // 绘制游戏
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#2d3436';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制网格背景
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // 绘制竖向道路
+            const roadWidth = 400;
+            const roadX = (canvas.width - roadWidth) / 2;
+            ctx.fillStyle = 'rgba(100, 100, 100, 0.4)';
+            ctx.fillRect(roadX, 0, roadWidth, canvas.height);
+            
+            // 绘制道路中线（竖向）
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([30, 30]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 绘制道路边界
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(roadX, 0);
+            ctx.lineTo(roadX, canvas.height);
+            ctx.moveTo(roadX + roadWidth, 0);
+            ctx.lineTo(roadX + roadWidth, canvas.height);
+            ctx.stroke();
+
+            // 绘制屏障
+            barriers.forEach(barrier => {
+                // 屏障阴影
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(barrier.x + 3, barrier.y + 3, barrier.width, barrier.height);
+
+                // 屏障主体 - 使用警告色
+                const gradient = ctx.createLinearGradient(barrier.x, barrier.y, barrier.x, barrier.y + barrier.height);
+                gradient.addColorStop(0, '#ff6b6b');
+                gradient.addColorStop(0.5, '#ee5a6f');
+                gradient.addColorStop(1, '#ff6b6b');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(barrier.x, barrier.y, barrier.width, barrier.height);
+
+                // 屏障边框
+                ctx.strokeStyle = '#ff4757';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(barrier.x, barrier.y, barrier.width, barrier.height);
+                
+                // 屏障警告条纹
+                ctx.fillStyle = '#ffd32a';
+                for (let i = 0; i < barrier.width; i += 20) {
+                    ctx.fillRect(barrier.x + i, barrier.y, 10, barrier.height);
+                }
+            });
+
+            // 绘制赛车
+            ctx.save();
+
+            // 赛车阴影
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(car.x + car.width/2 + 3, car.y + car.height/2 + 3,
+                       car.width/2, car.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 赛车主体
+            ctx.fillStyle = car.color;
+            ctx.beginPath();
+            ctx.ellipse(car.x + car.width/2, car.y + car.height/2,
+                       car.width/2, car.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 赛车高光
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(car.x + car.width/2, car.y + car.height/3,
+                       car.width/3, car.height/4, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 赛车窗户
+            ctx.fillStyle = '#74b9ff';
+            ctx.fillRect(car.x + car.width - 12, car.y + 5, 8, 15);
+            
+            // 绘制炮管（表示可以发射）
+            ctx.fillStyle = '#2d3436';
+            ctx.fillRect(car.x + car.width / 2 - 2, car.y - 8, 4, 8);
+
+            ctx.restore();
+
+            // 绘制子弹
+            bullets.forEach(bullet => {
+                // 子弹发光效果
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#feca57';
+                ctx.fillStyle = '#feca57';
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                ctx.shadowBlur = 0;
+                
+                // 子弹高光
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(bullet.x + 1, bullet.y + 1, bullet.width - 2, 3);
+            });
+
+            // 绘制TNT障碍
+            tntObstacles.forEach(tnt => {
+                // TNT阴影
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(tnt.x + 3, tnt.y + 3, tnt.width, tnt.height);
+
+                // TNT主体 - 红色警告色
+                const gradient = ctx.createLinearGradient(tnt.x, tnt.y, tnt.x + tnt.width, tnt.y + tnt.height);
+                gradient.addColorStop(0, '#ff4757');
+                gradient.addColorStop(0.5, '#c44569');
+                gradient.addColorStop(1, '#ff4757');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(tnt.x, tnt.y, tnt.width, tnt.height);
+
+                // TNT边框
+                ctx.strokeStyle = '#ff3838';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(tnt.x, tnt.y, tnt.width, tnt.height);
+                
+                // TNT字样
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('TNT', tnt.x + tnt.width / 2, tnt.y + tnt.height / 2);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+            });
+
+            // 绘制爆炸效果
+            explosions.forEach(explosion => {
+                const life = explosion.life;
+                
+                // 绘制中心爆炸光球
+                if (life > 0) {
+                    ctx.save();
+                    const centerAlpha = life * 0.8;
+                    const centerSize = explosion.centerSize * (1 - life * 0.5);
+                    
+                    // 中心光球 - 白色到黄色渐变
+                    const centerGradient = ctx.createRadialGradient(
+                        explosion.x, explosion.y, 0,
+                        explosion.x, explosion.y, centerSize
+                    );
+                    centerGradient.addColorStop(0, 'rgba(255, 255, 255, ' + centerAlpha + ')');
+                    centerGradient.addColorStop(0.5, 'rgba(255, 236, 87, ' + centerAlpha + ')');
+                    centerGradient.addColorStop(1, 'rgba(255, 107, 107, ' + centerAlpha * 0.5 + ')');
+                    
+                    ctx.fillStyle = centerGradient;
+                    ctx.beginPath();
+                    ctx.arc(explosion.x, explosion.y, centerSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+                
+                // 绘制爆炸粒子
+                explosion.particles.forEach(particle => {
+                    if (particle.life > 0) {
+                        // 根据生命周期调整透明度和大小
+                        const alpha = particle.life;
+                        const size = particle.size * particle.life;
+                        
+                        // 绘制粒子
+                        ctx.save();
+                        ctx.globalAlpha = alpha;
+                        ctx.fillStyle = particle.color;
+                        ctx.shadowBlur = 15 * alpha;
+                        ctx.shadowColor = particle.color;
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                });
+            });
+        }
+
+        // 更新游戏逻辑
+        function update(currentTime) {
+            if (!gameRunning) return;
+
+            // 计算帧时间差
+            const deltaTime = lastFrameTime ? currentTime - lastFrameTime : 16;
+            lastFrameTime = currentTime;
+
+            // 移动赛车（只能左右移动，限制在道路范围内）
+            const roadWidth = 400;
+            const roadX = (canvas.width - roadWidth) / 2;
+            if (keys.left && car.x > roadX) {
+                car.x -= car.speed;
+            }
+            if (keys.right && car.x < roadX + roadWidth - car.width) {
+                car.x += car.speed;
+            }
+
+            const level = levels[currentLevel - 1];
+            
+            // 更新子弹冷却
+            if (bulletCooldown > 0) {
+                bulletCooldown -= deltaTime;
+            }
+            
+            // 发射子弹
+            if (keys.space && bulletCooldown <= 0) {
+                shootBullet();
+            }
+            
+            // 更新子弹位置
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.y -= bullet.speed;  // 向上移动
+                
+                // 移除超出画布的子弹
+                if (bullet.y + bullet.height < 0) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // 检测子弹与屏障的碰撞
+                for (let j = barriers.length - 1; j >= 0; j--) {
+                    const barrier = barriers[j];
+                    if (checkCollision(bullet, barrier)) {
+                        // 子弹击中屏障，移除两者
+                        bullets.splice(i, 1);
+                        barriers.splice(j, 1);
+                        score += 50;  // 击毁屏障加50分
+                        barriersPassed++;
+                        break;
+                    }
+                }
+                
+                // 检测子弹与TNT的碰撞
+                for (let j = tntObstacles.length - 1; j >= 0; j--) {
+                    const tnt = tntObstacles[j];
+                    if (checkCollision(bullet, tnt)) {
+                        // 子弹击中TNT，创建爆炸效果
+                        createExplosion(tnt.x + tnt.width / 2, tnt.y + tnt.height / 2, 80);
+                        bullets.splice(i, 1);
+                        tntObstacles.splice(j, 1);
+                        score += 100;  // 击毁TNT加100分
+                        break;
+                    }
+                }
+            }
+            
+            // 生成屏障（基于实际时间）
+            barrierSpawnTimer += deltaTime;
+            if (barrierSpawnTimer >= level.barrierSpawnRate) {
+                spawnBarrier();
+                barrierSpawnTimer = 0;
+            }
+            
+            // 生成TNT（基于实际时间和数量限制）
+            const currentTntCount = tntObstacles.length;
+            if (currentTntCount < level.tntCount) {
+                tntSpawnTimer += deltaTime;
+                if (tntSpawnTimer >= level.tntSpawnRate) {
+                    spawnTNT();
+                    tntSpawnTimer = 0;
+                }
+            }
+
+            // 更新屏障位置
+            for (let i = barriers.length - 1; i >= 0; i--) {
+                const barrier = barriers[i];
+                
+                // 向下移动
+                barrier.y += barrier.speedY;
+                
+                // 左右移动（在道路范围内）
+                barrier.x += barrier.speedX * barrier.direction;
+                
+                // 碰到道路左右边界反向
+                const roadX = barrier.roadX || (canvas.width - 400) / 2;
+                const roadWidth = barrier.roadWidth || 400;
+                if (barrier.x + barrier.width > roadX + roadWidth || barrier.x < roadX) {
+                    barrier.direction *= -1;
+                    // 确保不超出道路边界
+                    barrier.x = Math.max(roadX, Math.min(barrier.x, roadX + roadWidth - barrier.width));
+                }
+                
+                // 移除超出底部的屏障
+                if (barrier.y > canvas.height) {
+                    barriers.splice(i, 1);
+                    barriersPassed++;
+                    score += 10;  // 每躲过一个屏障加10分
+                }
+            }
+
+            // 更新TNT位置
+            for (let i = tntObstacles.length - 1; i >= 0; i--) {
+                const tnt = tntObstacles[i];
+                
+                // 向下移动
+                tnt.y += tnt.speedY;
+                
+                // 左右移动（在道路范围内）
+                tnt.x += tnt.speedX * tnt.direction;
+                
+                // 碰到道路左右边界反向
+                const roadX = tnt.roadX || (canvas.width - 400) / 2;
+                const roadWidth = tnt.roadWidth || 400;
+                if (tnt.x + tnt.width > roadX + roadWidth || tnt.x < roadX) {
+                    tnt.direction *= -1;
+                    // 确保不超出道路边界
+                    tnt.x = Math.max(roadX, Math.min(tnt.x, roadX + roadWidth - tnt.width));
+                }
+                
+                // 移除超出底部的TNT
+                if (tnt.y > canvas.height) {
+                    tntObstacles.splice(i, 1);
+                }
+            }
+
+            // 检测与屏障的碰撞
+            for (let barrier of barriers) {
+                if (checkCollision(car, barrier)) {
+                    gameOver();
+                    return;
+                }
+            }
+            
+            // 更新爆炸效果
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const explosion = explosions[i];
+                explosion.life -= 0.02;
+                
+                // 更新粒子
+                explosion.particles.forEach(particle => {
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.life -= particle.decay;
+                    particle.vx *= 0.98;  // 减速
+                    particle.vy *= 0.98;
+                });
+                
+                // 移除已完成的爆炸
+                if (explosion.life <= 0) {
+                    explosions.splice(i, 1);
+                }
+            }
+
+            // 检测与TNT的碰撞（会爆炸）
+            for (let tnt of tntObstacles) {
+                if (checkCollision(car, tnt)) {
+                    // TNT爆炸，创建爆炸效果
+                    createExplosion(car.x + car.width / 2, car.y + car.height / 2, 100);
+                    // 延迟一下再结束游戏，让玩家看到爆炸效果
+                    setTimeout(() => {
+                        gameOver('tnt');
+                    }, 300);
+                    return;
+                }
+            }
+
+            // 检查关卡完成条件
+            gameTime = Date.now() - levelStartTime;
+            if (gameTime >= level.duration || barriersPassed >= level.targetBarriers) {
+                levelComplete();
+                return;
+            }
+
+            // 增加分数（时间分数）
+            score += 1;
+            updateUI();
+        }
+
+        // 游戏结束
+        function gameOver(reason) {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalReward').textContent = totalReward;
+            const reasonText = document.getElementById('gameOverReason');
+            if (reason === 'tnt') {
+                reasonText.textContent = '💥 TNT爆炸了！';
+            } else {
+                reasonText.textContent = '你撞到屏障了！';
+            }
+            document.getElementById('gameOverOverlay').classList.remove('hidden');
+        }
+
+        // 关卡完成
+        function levelComplete() {
+            gameRunning = false;
+            const reward = levels[currentLevel - 1].reward;
+            totalReward += reward;
+            score += reward;
+
+            if (currentLevel >= 7) {
+                // 游戏胜利
+                document.getElementById('winReward').textContent = totalReward;
+                document.getElementById('winScore').textContent = score;
+                document.getElementById('winOverlay').classList.remove('hidden');
+            } else {
+                // 下一关
+                document.getElementById('levelReward').textContent = reward;
+                document.getElementById('nextLevel').textContent = currentLevel + 1;
+                document.getElementById('levelCompleteOverlay').classList.remove('hidden');
+            }
+        }
+
+        // 下一关
+        function nextLevel() {
+            currentLevel++;
+            document.getElementById('levelCompleteOverlay').classList.add('hidden');
+            initLevel(currentLevel);
+            gameRunning = true;
+        }
+
+        // 开始游戏
+        function startGame() {
+            document.getElementById('startOverlay').classList.add('hidden');
+            currentLevel = 1;
+            score = 0;
+            totalReward = 0;
+            initLevel(currentLevel);
+            gameRunning = true;
+        }
+
+        // 重新开始
+        function restartGame() {
+            document.getElementById('gameOverOverlay').classList.add('hidden');
+            document.getElementById('winOverlay').classList.add('hidden');
+            currentLevel = 1;
+            score = 0;
+            totalReward = 0;
+            initLevel(currentLevel);
+            gameRunning = true;
+        }
+
+        // 键盘事件
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    keys.left = true;
+                    e.preventDefault();
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    keys.right = true;
+                    e.preventDefault();
+                    break;
+                case ' ':
+                case 'Space':
+                    keys.space = true;
+                    e.preventDefault();
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    keys.left = false;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    keys.right = false;
+                    break;
+                case ' ':
+                case 'Space':
+                    keys.space = false;
+                    break;
+            }
+        });
+
+        // 游戏循环
+        function gameLoop(currentTime) {
+            update(currentTime);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 启动游戏循环
+        gameLoop();
+    </script>
+</body>
+</html>
