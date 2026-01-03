@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>赛车游戏</title>
     <style>
         * {
@@ -19,6 +19,11 @@
             justify-content: center;
             align-items: center;
             color: #fff;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .game-container {
@@ -27,6 +32,20 @@
             padding: 20px;
             border-radius: 15px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 768px) {
+            .game-container {
+                padding: 10px;
+                border-radius: 0;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
         }
 
         h1 {
@@ -64,12 +83,146 @@
             box-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
             display: block;
             margin: 0 auto;
+            max-width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+
+        @media (max-width: 768px) {
+            #gameCanvas {
+                width: 100%;
+                max-width: 100vw;
+                border-width: 2px;
+            }
         }
 
         .controls {
             margin-top: 20px;
             font-size: 0.9em;
             color: #aaa;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                font-size: 0.75em;
+                padding: 0 10px;
+            }
+            
+            .desktop-text {
+                display: none !important;
+            }
+            
+            .mobile-text {
+                display: block !important;
+            }
+            
+            .info-panel {
+                font-size: 0.9em;
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+            
+            .info-item {
+                padding: 5px 10px;
+                font-size: 0.9em;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .overlay-content {
+                padding: 20px;
+                max-width: 90%;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            
+            .overlay-content h2 {
+                font-size: 2em;
+            }
+            
+            .car-selection {
+                gap: 10px;
+            }
+            
+            .car-option {
+                width: 60px;
+                height: 40px;
+            }
+            
+            button {
+                padding: 12px 30px;
+                font-size: 1em;
+            }
+        }
+
+        /* 移动端控制按钮 */
+        .mobile-controls {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            z-index: 100;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: flex;
+            }
+        }
+
+        .mobile-btn {
+            background: rgba(255, 107, 107, 0.8);
+            border: 3px solid #ff6b6b;
+            border-radius: 15px;
+            color: #fff;
+            font-size: 1.5em;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+            pointer-events: auto;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.1s;
+            font-weight: bold;
+        }
+
+        .mobile-btn:active {
+            transform: scale(0.95);
+            background: rgba(255, 107, 107, 1);
+        }
+
+        .mobile-btn-left {
+            margin-right: auto;
+        }
+
+        .mobile-btn-right {
+            margin-left: auto;
+        }
+
+        .mobile-btn-shoot {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(254, 202, 87, 0.8);
+            border-color: #feca57;
+            width: 70px;
+            height: 70px;
+            font-size: 1.8em;
+        }
+
+        .mobile-btn-shoot:active {
+            background: rgba(254, 202, 87, 1);
         }
 
         .overlay {
@@ -196,8 +349,16 @@
         <canvas id="gameCanvas" width="800" height="500"></canvas>
 
         <div class="controls">
-            <p>使用 ⬅️ ➡️ 或 A D 控制赛车左右移动 | 空格键发射子弹消灭屏障 | ⚠️ 小心红色TNT障碍，碰到会爆炸！</p>
+            <p class="desktop-text">使用 ⬅️ ➡️ 或 A D 控制赛车左右移动 | 空格键发射子弹消灭屏障 | ⚠️ 小心红色TNT障碍，碰到会爆炸！</p>
+            <p class="mobile-text" style="display: none;">使用下方按钮控制赛车 | ⚠️ 小心红色TNT障碍，碰到会爆炸！</p>
         </div>
+    </div>
+
+    <!-- 移动端控制按钮 -->
+    <div class="mobile-controls">
+        <button class="mobile-btn mobile-btn-left" id="btnLeft">⬅️</button>
+        <button class="mobile-btn mobile-btn-shoot" id="btnShoot">🔫</button>
+        <button class="mobile-btn mobile-btn-right" id="btnRight">➡️</button>
     </div>
 
     <!-- 开始游戏界面 -->
@@ -1043,6 +1204,156 @@
                     break;
             }
         });
+
+        // 移动端按钮事件
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+        const btnShoot = document.getElementById('btnShoot');
+
+        if (btnLeft && btnRight && btnShoot) {
+            // 左移按钮
+            btnLeft.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys.left = true;
+            });
+            btnLeft.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys.left = false;
+            });
+            btnLeft.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                keys.left = true;
+            });
+            btnLeft.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                keys.left = false;
+            });
+
+            // 右移按钮
+            btnRight.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys.right = true;
+            });
+            btnRight.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys.right = false;
+            });
+            btnRight.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                keys.right = true;
+            });
+            btnRight.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                keys.right = false;
+            });
+
+            // 发射按钮
+            btnShoot.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys.space = true;
+            });
+            btnShoot.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys.space = false;
+            });
+            btnShoot.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                keys.space = true;
+            });
+            btnShoot.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                keys.space = false;
+            });
+        }
+
+        // 触摸滑动控制（可选）
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (e.changedTouches.length > 0) {
+                const touch = e.changedTouches[0];
+                const deltaX = touch.clientX - touchStartX;
+                const deltaY = touch.clientY - touchStartY;
+                
+                // 如果主要是水平移动，则控制左右
+                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
+                    if (deltaX > 0) {
+                        keys.right = true;
+                        setTimeout(() => { keys.right = false; }, 100);
+                    } else {
+                        keys.left = true;
+                        setTimeout(() => { keys.left = false; }, 100);
+                    }
+                }
+            }
+        });
+
+        // 防止页面滚动和缩放
+        document.addEventListener('touchmove', (e) => {
+            if (e.target === canvas || e.target.closest('.mobile-controls')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('gesturestart', (e) => {
+            e.preventDefault();
+        });
+
+        document.addEventListener('gesturechange', (e) => {
+            e.preventDefault();
+        });
+
+        document.addEventListener('gestureend', (e) => {
+            e.preventDefault();
+        });
+
+        // 响应式画布调整
+        function resizeCanvas() {
+            if (window.innerWidth <= 768) {
+                // 移动端：保持宽高比，适应屏幕
+                const aspectRatio = 800 / 500;
+                const padding = 20;
+                const controlsHeight = 150; // 为控制按钮预留空间
+                const availableWidth = window.innerWidth - padding * 2;
+                const availableHeight = window.innerHeight - controlsHeight - 100; // 减去UI元素高度
+                
+                let newWidth = availableWidth;
+                let newHeight = newWidth / aspectRatio;
+                
+                // 如果高度超出，按高度调整
+                if (newHeight > availableHeight) {
+                    newHeight = availableHeight;
+                    newWidth = newHeight * aspectRatio;
+                }
+                
+                canvas.style.width = newWidth + 'px';
+                canvas.style.height = newHeight + 'px';
+            } else {
+                // 桌面端：保持原始尺寸
+                canvas.style.width = '';
+                canvas.style.height = '';
+            }
+        }
+
+        // 监听窗口大小变化和方向变化
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(resizeCanvas, 100);
+        });
+        resizeCanvas();
 
         // 游戏循环
         function gameLoop(currentTime) {
