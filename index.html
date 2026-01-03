@@ -431,6 +431,131 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
+        // 音效系统
+        let audioContext = null;
+        let soundEnabled = true;
+        
+        // 初始化音频上下文（需要用户交互后）
+        function initAudio() {
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.log('Audio not supported');
+                    soundEnabled = false;
+                }
+            }
+        }
+        
+        // 在用户第一次交互时初始化音频
+        document.addEventListener('click', initAudio, { once: true });
+        document.addEventListener('touchstart', initAudio, { once: true });
+
+        // 生成音效函数
+        function playSound(frequency, duration, type = 'sine', volume = 0.3) {
+            if (!soundEnabled || !audioContext) return;
+            
+            try {
+                // 如果音频上下文被暂停，恢复它
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = frequency;
+                oscillator.type = type;
+                
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        // 音效库
+        const sounds = {
+            // 发射子弹
+            shoot: () => {
+                playSound(800, 0.1, 'square', 0.2);
+            },
+            
+            // 击中障碍
+            hit: () => {
+                playSound(400, 0.15, 'sine', 0.25);
+                playSound(600, 0.1, 'sine', 0.2);
+            },
+            
+            // 击中TNT爆炸
+            explosion: () => {
+                // 爆炸音效 - 多个频率叠加
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        playSound(100 + i * 50, 0.2, 'sawtooth', 0.3);
+                    }, i * 20);
+                }
+                // 低音爆炸
+                playSound(80, 0.3, 'square', 0.4);
+            },
+            
+            // 碰撞
+            crash: () => {
+                playSound(200, 0.4, 'sawtooth', 0.5);
+                playSound(150, 0.3, 'square', 0.4);
+            },
+            
+            // 关卡完成
+            levelComplete: () => {
+                // 上升音阶
+                const notes = [523, 659, 784, 1047]; // C, E, G, C
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        playSound(freq, 0.2, 'sine', 0.3);
+                    }, i * 150);
+                });
+            },
+            
+            // 游戏胜利
+            victory: () => {
+                // 胜利音效 - 上升音阶
+                const notes = [523, 659, 784, 1047, 1319]; // C, E, G, C, E
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        playSound(freq, 0.25, 'sine', 0.35);
+                    }, i * 120);
+                });
+            },
+            
+            // 游戏结束
+            gameOver: () => {
+                // 下降音阶
+                const notes = [523, 440, 349, 262]; // C, A, F, C
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        playSound(freq, 0.3, 'sine', 0.4);
+                    }, i * 200);
+                });
+            },
+            
+            // 连击
+            combo: (count) => {
+                const freq = 600 + (count * 50);
+                playSound(freq, 0.15, 'sine', 0.3);
+            },
+            
+            // 按钮点击
+            button: () => {
+                playSound(600, 0.1, 'sine', 0.2);
+            }
+        };
+
         // 游戏状态
         let gameRunning = false;
         let currentLevel = 1;
@@ -440,6 +565,10 @@
         let gameTime = 0;
         let levelStartTime = 0;
         let barriersPassed = 0;
+        let comboCount = 0;  // 连击数
+        let lastHitTime = 0;  // 上次击中的时间
+        let currentPhase = 0;  // 当前阶段
+        let levelTheme = null;  // 当前关卡主题
 
         // 赛车样式配置
         const carStyles = [
@@ -490,84 +619,164 @@
         // TNT生成计时器
         let tntSpawnTimer = 0;
 
-        // 7个关卡设计 - 生存模式
+        // 关卡主题配置
+        const levelThemes = {
+            training: {
+                name: '新手训练',
+                description: '慢速障碍，熟悉操作',
+                bgColor: '#2d3436',
+                roadColor: 'rgba(100, 100, 100, 0.4)',
+                accentColor: '#4ecdc4'
+            },
+            speed: {
+                name: '速度挑战',
+                description: '高速障碍，考验反应',
+                bgColor: '#1a1a2e',
+                roadColor: 'rgba(255, 107, 107, 0.3)',
+                accentColor: '#ff6b6b'
+            },
+            dense: {
+                name: '密集模式',
+                description: '大量障碍，密集来袭',
+                bgColor: '#16213e',
+                roadColor: 'rgba(254, 202, 87, 0.3)',
+                accentColor: '#feca57'
+            },
+            mixed: {
+                name: '混合模式',
+                description: '多种障碍混合出现',
+                bgColor: '#2d1b3d',
+                roadColor: 'rgba(255, 159, 243, 0.3)',
+                accentColor: '#ff9ff3'
+            },
+            wave: {
+                name: '波浪模式',
+                description: '障碍成波浪式出现',
+                bgColor: '#1e3a5f',
+                roadColor: 'rgba(84, 160, 255, 0.3)',
+                accentColor: '#54a0ff'
+            },
+            extreme: {
+                name: '极限模式',
+                description: '高速+高密度，极限挑战',
+                bgColor: '#3d1a1a',
+                roadColor: 'rgba(255, 71, 87, 0.4)',
+                accentColor: '#ff4757'
+            },
+            boss: {
+                name: '终极Boss',
+                description: '所有机制叠加，最终挑战',
+                bgColor: '#1a1a1a',
+                roadColor: 'rgba(255, 215, 0, 0.4)',
+                accentColor: '#ffd700'
+            }
+        };
+
+        // 障碍类型配置
+        const barrierTypes = {
+            small: { width: 80, height: 25, speed: 1.2, color: '#ff6b6b', score: 30 },
+            medium: { width: 120, height: 30, speed: 1.0, color: '#ff6b6b', score: 50 },
+            large: { width: 180, height: 35, speed: 0.8, color: '#ee5a6f', score: 70 },
+            fast: { width: 100, height: 25, speed: 1.5, color: '#ff4757', score: 60 },
+            slow: { width: 150, height: 30, speed: 0.6, color: '#ff6b6b', score: 40 }
+        };
+
+        // 7个关卡设计 - 多样化机制
         const levels = [
-            // 第1关 - 简单模式：生存30秒或躲避10个屏障
+            // 第1关 - 新手训练：慢速、少量障碍
             {
+                name: '新手训练',
+                theme: 'training',
                 reward: 100,
-                duration: 30000,  // 30秒
-                barrierSpawnRate: 2000,  // 每2秒生成一个
-                barrierSpeed: 2,  // 向下移动速度
-                barrierHorizontalSpeed: 1.5,  // 左右移动速度
+                duration: 30000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 2500, barrierTypes: ['medium', 'slow'], tntSpawnRate: 6000, tntCount: 1 },
+                    { startTime: 15000, barrierSpawnRate: 2000, barrierTypes: ['medium', 'small'], tntSpawnRate: 5000, tntCount: 2 }
+                ],
                 targetBarriers: 10,
-                tntCount: 2,  // TNT数量
-                tntSpawnRate: 5000  // 每5秒生成一个TNT
+                tntCount: 2
             },
-            // 第2关 - 中等难度
+            // 第2关 - 速度挑战：高速障碍
             {
+                name: '速度挑战',
+                theme: 'speed',
                 reward: 200,
-                duration: 40000,  // 40秒
-                barrierSpawnRate: 1500,
-                barrierSpeed: 2.5,
-                barrierHorizontalSpeed: 2,
+                duration: 40000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 1800, barrierTypes: ['fast', 'small'], tntSpawnRate: 4500, tntCount: 2 },
+                    { startTime: 20000, barrierSpawnRate: 1500, barrierTypes: ['fast', 'medium'], tntSpawnRate: 4000, tntCount: 3 }
+                ],
                 targetBarriers: 15,
-                tntCount: 4,
-                tntSpawnRate: 4000
+                tntCount: 4
             },
-            // 第3关 - 困难
+            // 第3关 - 密集模式：大量障碍
             {
+                name: '密集模式',
+                theme: 'dense',
                 reward: 300,
-                duration: 50000,  // 50秒
-                barrierSpawnRate: 1200,
-                barrierSpeed: 3,
-                barrierHorizontalSpeed: 2.5,
+                duration: 50000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 1200, barrierTypes: ['small', 'medium'], tntSpawnRate: 4000, tntCount: 3 },
+                    { startTime: 25000, barrierSpawnRate: 1000, barrierTypes: ['small', 'medium', 'large'], tntSpawnRate: 3500, tntCount: 4 }
+                ],
                 targetBarriers: 20,
-                tntCount: 6,
-                tntSpawnRate: 3500
+                tntCount: 6
             },
-            // 第4关 - 非常困难
+            // 第4关 - 混合模式：多种障碍混合
             {
+                name: '混合模式',
+                theme: 'mixed',
                 reward: 500,
-                duration: 60000,  // 60秒
-                barrierSpawnRate: 1000,
-                barrierSpeed: 3.5,
-                barrierHorizontalSpeed: 3,
+                duration: 60000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 1500, barrierTypes: ['medium', 'fast'], tntSpawnRate: 3500, tntCount: 4 },
+                    { startTime: 20000, barrierSpawnRate: 1200, barrierTypes: ['small', 'medium', 'fast'], tntSpawnRate: 3000, tntCount: 5 },
+                    { startTime: 40000, barrierSpawnRate: 1000, barrierTypes: ['small', 'medium', 'large', 'fast'], tntSpawnRate: 2500, tntCount: 6 }
+                ],
                 targetBarriers: 25,
-                tntCount: 8,
-                tntSpawnRate: 3000
+                tntCount: 8
             },
-            // 第5关 - 终极挑战
+            // 第5关 - 波浪模式：节奏性出现
             {
+                name: '波浪模式',
+                theme: 'wave',
                 reward: 1000,
-                duration: 70000,  // 70秒
-                barrierSpawnRate: 800,
-                barrierSpeed: 4,
-                barrierHorizontalSpeed: 3.5,
+                duration: 70000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 1000, barrierTypes: ['medium', 'large'], tntSpawnRate: 3000, tntCount: 5 },
+                    { startTime: 23000, barrierSpawnRate: 800, barrierTypes: ['fast', 'medium'], tntSpawnRate: 2500, tntCount: 6 },
+                    { startTime: 46000, barrierSpawnRate: 600, barrierTypes: ['small', 'fast', 'large'], tntSpawnRate: 2000, tntCount: 7 }
+                ],
                 targetBarriers: 30,
-                tntCount: 10,
-                tntSpawnRate: 2500
+                tntCount: 10
             },
-            // 第6关 - 地狱模式
+            // 第6关 - 极限模式：高速+高密度
             {
+                name: '极限模式',
+                theme: 'extreme',
                 reward: 1500,
-                duration: 80000,  // 80秒
-                barrierSpawnRate: 700,
-                barrierSpeed: 4.5,
-                barrierHorizontalSpeed: 4,
+                duration: 80000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 900, barrierTypes: ['fast', 'small'], tntSpawnRate: 2500, tntCount: 6 },
+                    { startTime: 26000, barrierSpawnRate: 700, barrierTypes: ['fast', 'medium', 'small'], tntSpawnRate: 2000, tntCount: 7 },
+                    { startTime: 52000, barrierSpawnRate: 500, barrierTypes: ['fast', 'small', 'medium', 'large'], tntSpawnRate: 1800, tntCount: 8 }
+                ],
                 targetBarriers: 35,
-                tntCount: 12,
-                tntSpawnRate: 2000
+                tntCount: 12
             },
-            // 第7关 - 终极地狱
+            // 第7关 - 终极Boss：所有机制叠加
             {
+                name: '终极Boss',
+                theme: 'boss',
                 reward: 2000,
-                duration: 90000,  // 90秒
-                barrierSpawnRate: 600,
-                barrierSpeed: 5,
-                barrierHorizontalSpeed: 4.5,
+                duration: 90000,
+                phases: [
+                    { startTime: 0, barrierSpawnRate: 800, barrierTypes: ['medium', 'fast'], tntSpawnRate: 2200, tntCount: 7 },
+                    { startTime: 30000, barrierSpawnRate: 600, barrierTypes: ['fast', 'small', 'large'], tntSpawnRate: 1800, tntCount: 8 },
+                    { startTime: 60000, barrierSpawnRate: 400, barrierTypes: ['small', 'fast', 'medium', 'large'], tntSpawnRate: 1500, tntCount: 10 }
+                ],
                 targetBarriers: 40,
-                tntCount: 15,
-                tntSpawnRate: 1800
+                tntCount: 15
             }
         ];
 
@@ -575,6 +784,7 @@
         function selectCar(index) {
             selectedCarIndex = index;
             car.color = carStyles[index].color;
+            sounds.button();  // 播放按钮音效
             
             // 更新UI
             document.querySelectorAll('.car-option').forEach((option, i) => {
@@ -586,24 +796,46 @@
             });
         }
 
-        // 生成屏障
-        function spawnBarrier() {
+        // 获取当前阶段
+        function getCurrentPhase() {
             const level = levels[currentLevel - 1];
+            const elapsed = Date.now() - levelStartTime;
+            
+            for (let i = level.phases.length - 1; i >= 0; i--) {
+                if (elapsed >= level.phases[i].startTime) {
+                    return level.phases[i];
+                }
+            }
+            return level.phases[0];
+        }
+
+        // 生成屏障（支持多种类型）
+        function spawnBarrier() {
+            const phase = getCurrentPhase();
             const roadWidth = 400;
             const roadX = (canvas.width - roadWidth) / 2;
-            const barrierWidth = 120 + Math.random() * 80;  // 120-200宽度
-            const startX = roadX + Math.random() * (roadWidth - barrierWidth);
+            
+            // 随机选择障碍类型
+            const typeName = phase.barrierTypes[Math.floor(Math.random() * phase.barrierTypes.length)];
+            const type = barrierTypes[typeName];
+            
+            const startX = roadX + Math.random() * (roadWidth - type.width);
+            const baseSpeed = type.speed;
+            const level = levels[currentLevel - 1];
             
             barriers.push({
                 x: startX,
-                y: -30,  // 从画布上方开始
-                width: barrierWidth,
-                height: 30,
-                speedY: level.barrierSpeed,
-                speedX: level.barrierHorizontalSpeed,
-                direction: Math.random() > 0.5 ? 1 : -1,  // 随机左右方向
-                roadX: roadX,  // 记录道路边界
-                roadWidth: roadWidth
+                y: -type.height,
+                width: type.width,
+                height: type.height,
+                speedY: baseSpeed * (1 + (currentLevel - 1) * 0.2),  // 随关卡增加速度
+                speedX: (1 + (currentLevel - 1) * 0.15) * (typeName === 'fast' ? 1.5 : 1),
+                direction: Math.random() > 0.5 ? 1 : -1,
+                roadX: roadX,
+                roadWidth: roadWidth,
+                type: typeName,
+                color: type.color,
+                score: type.score
             });
         }
 
@@ -618,24 +850,26 @@
                     speed: 8
                 });
                 bulletCooldown = bulletCooldownTime;
+                sounds.shoot();  // 播放发射音效
             }
         }
 
         // 生成TNT障碍
         function spawnTNT() {
-            const level = levels[currentLevel - 1];
+            const phase = getCurrentPhase();
             const roadWidth = 400;
             const roadX = (canvas.width - roadWidth) / 2;
             const tntSize = 40;
             const startX = roadX + Math.random() * (roadWidth - tntSize);
+            const baseSpeed = 0.8 * (1 + (currentLevel - 1) * 0.2);
             
             tntObstacles.push({
                 x: startX,
                 y: -tntSize,  // 从画布上方开始
                 width: tntSize,
                 height: tntSize,
-                speedY: level.barrierSpeed * 0.8,  // 稍微慢一点
-                speedX: level.barrierHorizontalSpeed * 0.6,
+                speedY: baseSpeed,
+                speedX: (1 + (currentLevel - 1) * 0.15) * 0.6,
                 direction: Math.random() > 0.5 ? 1 : -1,
                 roadX: roadX,
                 roadWidth: roadWidth
@@ -673,7 +907,8 @@
         }
 
         // 初始化关卡
-        function initLevel(level) {
+        function initLevel(levelNum) {
+            const level = levels[levelNum - 1];
             car.x = canvas.width / 2 - car.width / 2;  // 底部中央
             car.y = canvas.height - car.height - 10;  // 固定在底部
             
@@ -689,11 +924,46 @@
             gameTime = 0;
             lastFrameTime = 0;
             bulletCooldown = 0;
+            comboCount = 0;
+            lastHitTime = 0;
+            currentPhase = 0;
+            
+            // 应用关卡主题
+            levelTheme = levelThemes[level.theme];
+            document.body.style.background = `linear-gradient(135deg, ${levelTheme.bgColor} 0%, ${levelTheme.bgColor}dd 100%)`;
             
             // 应用选中的赛车样式
             car.color = carStyles[selectedCarIndex].color;
 
             updateUI();
+            
+            // 显示关卡开始提示
+            showLevelStart(level);
+        }
+
+        // 显示关卡开始提示
+        function showLevelStart(level) {
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            overlay.id = 'levelStartOverlay';
+            overlay.innerHTML = `
+                <div class="overlay-content">
+                    <h2 style="color: ${levelTheme.accentColor}; font-size: 2.5em;">第${currentLevel}关</h2>
+                    <h3 style="color: ${levelTheme.accentColor}; font-size: 1.8em; margin: 15px 0;">${level.name}</h3>
+                    <p style="font-size: 1.2em; margin: 10px 0; color: #aaa;">${levelThemes[level.theme].description}</p>
+                    <p style="font-size: 1em; margin: 20px 0; color: #888;">奖励: ${level.reward}分 | 目标: ${level.targetBarriers}个障碍</p>
+                    <button id="startLevelBtn" style="margin-top: 20px;">开始挑战</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            gameRunning = false;
+            
+            // 绑定按钮事件
+            document.getElementById('startLevelBtn').addEventListener('click', () => {
+                sounds.button();  // 播放按钮音效
+                overlay.remove();
+                gameRunning = true;
+            });
         }
 
         // 更新UI
@@ -701,6 +971,22 @@
             document.getElementById('level').textContent = currentLevel;
             document.getElementById('score').textContent = score;
             document.getElementById('totalReward').textContent = totalReward;
+            
+            // 显示连击数（如果有）
+            if (comboCount > 1) {
+                const comboEl = document.getElementById('combo') || (() => {
+                    const el = document.createElement('div');
+                    el.id = 'combo';
+                    el.style.cssText = 'position: fixed; top: 100px; right: 20px; font-size: 1.5em; color: #feca57; font-weight: bold; z-index: 999; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);';
+                    document.body.appendChild(el);
+                    return el;
+                })();
+                comboEl.textContent = `连击 x${comboCount}!`;
+                comboEl.style.display = 'block';
+            } else {
+                const comboEl = document.getElementById('combo');
+                if (comboEl) comboEl.style.display = 'none';
+            }
         }
 
         // 碰撞检测
@@ -713,8 +999,8 @@
 
         // 绘制游戏
         function draw() {
-            // 清空画布
-            ctx.fillStyle = '#2d3436';
+            // 清空画布（使用主题背景色）
+            ctx.fillStyle = levelTheme ? levelTheme.bgColor : '#2d3436';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // 绘制网格背景
@@ -733,10 +1019,10 @@
                 ctx.stroke();
             }
 
-            // 绘制竖向道路
+            // 绘制竖向道路（使用主题色）
             const roadWidth = 400;
             const roadX = (canvas.width - roadWidth) / 2;
-            ctx.fillStyle = 'rgba(100, 100, 100, 0.4)';
+            ctx.fillStyle = levelTheme ? levelTheme.roadColor : 'rgba(100, 100, 100, 0.4)';
             ctx.fillRect(roadX, 0, roadWidth, canvas.height);
             
             // 绘制道路中线（竖向）
@@ -759,22 +1045,23 @@
             ctx.lineTo(roadX + roadWidth, canvas.height);
             ctx.stroke();
 
-            // 绘制屏障
+            // 绘制屏障（使用障碍类型颜色）
             barriers.forEach(barrier => {
                 // 屏障阴影
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 ctx.fillRect(barrier.x + 3, barrier.y + 3, barrier.width, barrier.height);
 
-                // 屏障主体 - 使用警告色
+                // 屏障主体 - 使用障碍类型颜色
+                const barrierColor = barrier.color || '#ff6b6b';
                 const gradient = ctx.createLinearGradient(barrier.x, barrier.y, barrier.x, barrier.y + barrier.height);
-                gradient.addColorStop(0, '#ff6b6b');
-                gradient.addColorStop(0.5, '#ee5a6f');
-                gradient.addColorStop(1, '#ff6b6b');
+                gradient.addColorStop(0, barrierColor);
+                gradient.addColorStop(0.5, barrierColor + 'dd');
+                gradient.addColorStop(1, barrierColor);
                 ctx.fillStyle = gradient;
                 ctx.fillRect(barrier.x, barrier.y, barrier.width, barrier.height);
 
                 // 屏障边框
-                ctx.strokeStyle = '#ff4757';
+                ctx.strokeStyle = barrierColor;
                 ctx.lineWidth = 3;
                 ctx.strokeRect(barrier.x, barrier.y, barrier.width, barrier.height);
                 
@@ -955,11 +1242,31 @@
                 for (let j = barriers.length - 1; j >= 0; j--) {
                     const barrier = barriers[j];
                     if (checkCollision(bullet, barrier)) {
-                        // 子弹击中屏障，移除两者
+                        // 连击系统
+                        const now = Date.now();
+                        if (now - lastHitTime < 2000) {  // 2秒内连续击中
+                            comboCount++;
+                        } else {
+                            comboCount = 1;
+                        }
+                        lastHitTime = now;
+                        
+                        // 计算分数（基础分数 + 连击奖励）
+                        const baseScore = barrier.score || 50;
+                        const comboBonus = comboCount > 1 ? comboCount * 10 : 0;
+                        const finalScore = baseScore + comboBonus;
+                        
                         bullets.splice(i, 1);
                         barriers.splice(j, 1);
-                        score += 50;  // 击毁屏障加50分
+                        score += finalScore;
                         barriersPassed++;
+                        
+                        // 播放音效
+                        if (comboCount > 1) {
+                            sounds.combo(comboCount);
+                        } else {
+                            sounds.hit();
+                        }
                         break;
                     }
                 }
@@ -968,31 +1275,57 @@
                 for (let j = tntObstacles.length - 1; j >= 0; j--) {
                     const tnt = tntObstacles[j];
                     if (checkCollision(bullet, tnt)) {
-                        // 子弹击中TNT，创建爆炸效果
+                        // 连击系统
+                        const now = Date.now();
+                        if (now - lastHitTime < 2000) {
+                            comboCount++;
+                        } else {
+                            comboCount = 1;
+                        }
+                        lastHitTime = now;
+                        
+                        // TNT爆炸，连击奖励更高
+                        const comboBonus = comboCount > 1 ? comboCount * 20 : 0;
+                        const finalScore = 100 + comboBonus;
+                        
                         createExplosion(tnt.x + tnt.width / 2, tnt.y + tnt.height / 2, 80);
+                        sounds.explosion();  // 播放爆炸音效
                         bullets.splice(i, 1);
                         tntObstacles.splice(j, 1);
-                        score += 100;  // 击毁TNT加100分
+                        score += finalScore;
                         break;
                     }
                 }
             }
             
-            // 生成屏障（基于实际时间）
+            // 获取当前阶段
+            const phase = getCurrentPhase();
+            
+            // 生成屏障（基于阶段配置）
             barrierSpawnTimer += deltaTime;
-            if (barrierSpawnTimer >= level.barrierSpawnRate) {
+            if (barrierSpawnTimer >= phase.barrierSpawnRate) {
                 spawnBarrier();
                 barrierSpawnTimer = 0;
             }
             
-            // 生成TNT（基于实际时间和数量限制）
+            // 生成TNT（基于阶段配置和数量限制）
             const currentTntCount = tntObstacles.length;
-            if (currentTntCount < level.tntCount) {
+            if (currentTntCount < phase.tntCount) {
                 tntSpawnTimer += deltaTime;
-                if (tntSpawnTimer >= level.tntSpawnRate) {
+                if (tntSpawnTimer >= phase.tntSpawnRate) {
                     spawnTNT();
                     tntSpawnTimer = 0;
                 }
+            }
+            
+            // 检查阶段变化
+            const elapsed = Date.now() - levelStartTime;
+            const newPhaseIndex = level.phases.findIndex((p, idx) => {
+                const nextPhase = level.phases[idx + 1];
+                return elapsed >= p.startTime && (!nextPhase || elapsed < nextPhase.startTime);
+            });
+            if (newPhaseIndex !== -1 && newPhaseIndex !== currentPhase) {
+                currentPhase = newPhaseIndex;
             }
 
             // 更新屏障位置
@@ -1050,6 +1383,7 @@
             // 检测与屏障的碰撞
             for (let barrier of barriers) {
                 if (checkCollision(car, barrier)) {
+                    sounds.crash();  // 播放碰撞音效
                     gameOver();
                     return;
                 }
@@ -1080,6 +1414,7 @@
                 if (checkCollision(car, tnt)) {
                     // TNT爆炸，创建爆炸效果
                     createExplosion(car.x + car.width / 2, car.y + car.height / 2, 100);
+                    sounds.explosion();  // 播放爆炸音效
                     // 延迟一下再结束游戏，让玩家看到爆炸效果
                     setTimeout(() => {
                         gameOver('tnt');
@@ -1112,6 +1447,7 @@
                 reasonText.textContent = '你撞到屏障了！';
             }
             document.getElementById('gameOverOverlay').classList.remove('hidden');
+            sounds.gameOver();  // 播放游戏结束音效
         }
 
         // 关卡完成
@@ -1126,16 +1462,19 @@
                 document.getElementById('winReward').textContent = totalReward;
                 document.getElementById('winScore').textContent = score;
                 document.getElementById('winOverlay').classList.remove('hidden');
+                sounds.victory();  // 播放胜利音效
             } else {
                 // 下一关
                 document.getElementById('levelReward').textContent = reward;
                 document.getElementById('nextLevel').textContent = currentLevel + 1;
                 document.getElementById('levelCompleteOverlay').classList.remove('hidden');
+                sounds.levelComplete();  // 播放关卡完成音效
             }
         }
 
         // 下一关
         function nextLevel() {
+            sounds.button();  // 播放按钮音效
             currentLevel++;
             document.getElementById('levelCompleteOverlay').classList.add('hidden');
             initLevel(currentLevel);
@@ -1144,6 +1483,7 @@
 
         // 开始游戏
         function startGame() {
+            sounds.button();  // 播放按钮音效
             document.getElementById('startOverlay').classList.add('hidden');
             currentLevel = 1;
             score = 0;
@@ -1154,6 +1494,7 @@
 
         // 重新开始
         function restartGame() {
+            sounds.button();  // 播放按钮音效
             document.getElementById('gameOverOverlay').classList.add('hidden');
             document.getElementById('winOverlay').classList.add('hidden');
             currentLevel = 1;
