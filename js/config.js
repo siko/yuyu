@@ -170,3 +170,16 @@ const levels = [
     }
 ];
 
+// 赛车初始配置
+const car = {
+    x: 380,  // 初始位置在底部中央
+    y: 450,  // 固定在底部
+    width: 40,
+    height: 25,
+    speed: 6,
+    color: '#ff6b6b'
+};
+
+// 子弹冷却时间配置
+const bulletCooldownTime = 200;  // 200ms冷却时间
+
